@@ -3,19 +3,16 @@ Param (
     [switch]$Help=$false,
     [switch]$DropAdRoles=$false,
     [switch]$NoCaseRoles=$false,
-	[string]$PgHost="",
+	[switch]$DryRun=$false,
+    [string]$PgHost="",
 	[string]$PgPort="",
-	[string]$PgDatabase="",
+	[string]$PgDatabase="postgres",
 	[string]$PgUser="",
 	[string]$PgPassword=""
 )
 $ErrorActionPreference = "Stop"
 
-# By Hans Schou 2018-10-19
-
-# PostgreSQL configuration
-# File pg_hba.conf:
-#   host all all 10.0.0.0/8 ldap ldapserver=example.org ldapprefix="" ldapsuffix="@example.org"
+# By Hans Schou 2019-05-08
 
 if ($Help) {
 	Write-Host @"
@@ -25,17 +22,21 @@ https://github.com/hanschou/pg_ad_sync
 Tool for automatic creating roles (users) in PosgreSQL which is defined in a Windows Active Directory group.
 
 Options:
-    -Help
+	-Help
 		This help.
 	  
-    -DropAdRoles
+	-DropAdRoles
 		Default: False
 		Drop all roles which has a special commment:
 			'Created by pg_ad_sync.'
 
-    -NoCaseRoles
+	-NoCaseRoles
 		Default: False
 		Do not create roles case sensitive. If roles are created case sensitive one has to logon with the exactly same casing.
+
+	-DryRun
+		Default: False
+		Run without dropping or creating users in postgres. Only create the SQL file pg_ad_sync.tmp.sql
 		
 	-PgHost
 		Default: Empty
@@ -46,7 +47,7 @@ Options:
 		Port number of the PostgreSQL port.
 		
 	-PgDatabase
-		Default: Blank
+		Default: postgres
 		Name of the PostgreSQL database.
 		
 	-PgUser
@@ -83,12 +84,26 @@ Invoke from within Powershell:
 Example output:
   CN=PG-ADMIN,OU=Admin,OU=Acme Inc,DC=example,DC=org
   CN=PG-USERS,OU=INF,OU=Acme Inc,DC=example,DC=org
+
+PostgreSQL configuration. Enable LDAP.
+ Add the following line to pg_hba.conf:
+   host all all 10.0.0.0/8 ldap ldapserver=example.org ldapprefix="" ldapsuffix="@example.org"
 "@
 	Exit
 }
 
-Remove-Item -Path "*.log"
-Get-Date -Format "o" | Add-Content "pg_ad_sync.log"
+$DayOfWeek=$(Get-Date -UFormat "%w")
+$LogFile = "pg_ad_sync.$DayOfWeek.log"
+$SqlFile = "pg_ad_sync.tmp.$DayOfWeek.sql"
+if (Test-Path $LogFile) {
+	Remove-Item -Path $LogFile
+}
+if (Test-Path $SqlFile) {
+	Remove-Item -Path $SqlFile
+}
+Get-Date -Format "o" | Add-Content $LogFile
+
+"\set ON_ERROR_STOP 0"  | Add-Content $SqlFile
 
 $psql = "psql.exe"
 
@@ -107,31 +122,32 @@ if ($PgUser) {
 if ($PgPassword) {
 	$Env:PGPASSWORD="$PgPassword"
 }
-if (-not (Test-Path Env:PGPASSWORD)) {
-	"Error: Environment variable PGPASSWORD and command line parameter '-PgPassword' is not set." | Add-Content "pg_ad_sync.log"
+if (-not (Test-Path 'Env:PGPASSWORD')) {
+	"Error: Environment variable PGPASSWORD and command line parameter '-PgPassword' is not set." | Add-Content $LogFile
 	Exit
 }
-"PostgreSQL invocation: $psql" | Add-Content "pg_ad_sync.log"
+"PostgreSQL invocation: $psql" | Add-Content $LogFile
 
-If (Test-Path "pg_ad_sync.tmp.sql") {
-    Remove-Item -Path "pg_ad_sync.tmp.sql"
+If (Test-Path $SqlFile) {
+    Remove-Item -Path $SqlFile
 }
 if ($DropAdRoles) {
-	"Warning, existing roles is dropped." | Add-Content "pg_ad_sync.log"
+	"Warning, existing roles are dropped." | Add-Content $LogFile
 	$command1 = @"
-"SELECT 'DROP ROLE """"' || rolname || '"""";' FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='Created by pg_ad_sync.' ORDER BY oid;"
+"SELECT 'DROP ROLE IF EXISTS """"' || rolname || '"""";' FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='Created by pg_ad_sync.' ORDER BY oid;"
 "@
-	Invoke-Expression "$psql --tuples-only --no-align --command=$command1" | Add-Content "pg_ad_sync.tmp.sql"
+	Invoke-Expression "$psql --tuples-only --no-align --command=$command1" 2>&1 | Add-Content $SqlFile
 	if (0 -ne $LASTEXITCODE) {
-		"Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content "pg_ad_sync.log"
+		"Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content $LogFile
 		Exit
 	}
 }
 
-Invoke-Expression "$psql --dbname=postgres --tuples-only --no-align --command=""SELECT rolname FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='This role is in sync with Active Directory.'""" |
+"Getting list from AD:" | Add-Content $LogFile
+Invoke-Expression "$psql --tuples-only --no-align --command=""SELECT rolname FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='This role is in sync with Active Directory.'""" |
     ForEach-Object {
         $role = $_
-        "-- Role: $role" | Add-Content "pg_ad_sync.tmp.sql"
+        "-- Role: $role" | Add-Content $SqlFile
         $search = [adsisearcher][ADSI]""
         $search.Filter = "(&(objectclass=group)(cn=$role))" # LDAP syntax
         $search.FindOne().GetDirectoryEntry() |
@@ -139,27 +155,36 @@ Invoke-Expression "$psql --dbname=postgres --tuples-only --no-align --command=""
                 ForEach-object {  # for each member in the group
                     $searcher = [adsisearcher]"(distinguishedname=$_)"
                     $member = $searcher.FindOne().Properties.samaccountname
-					if (-Not ($member -iMatch "postgres")) {
+					if ($member -iMatch "postgres" -Or $member -iMatch "^Skabelon.*") {
+						"-- Reserved word, skipping member: $member" | Add-Content $SqlFile
+					} else {
 						if (-Not $NoCaseRoles -Or $member -Match "-") {
 							$member = """$member"""
 						} else {
 							$member = "$member".ToLower()
 						}
-						"CREATE ROLE $member WITH LOGIN;" | Add-Content "pg_ad_sync.tmp.sql"
-						"COMMENT ON ROLE $member IS 'Created by pg_ad_sync.';" | Add-Content "pg_ad_sync.tmp.sql"
-						"GRANT ""$role"" TO $member;" | Add-Content "pg_ad_sync.tmp.sql"
+						"CREATE ROLE $member WITH LOGIN;" | Add-Content $SqlFile
+						"COMMENT ON ROLE $member IS 'Created by pg_ad_sync.';" | Add-Content $SqlFile
+						"GRANT ""$role"" TO $member;" | Add-Content $SqlFile
 					}
                 }
     }
 if (0 -ne $LASTEXITCODE) {
-	"Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content "pg_ad_sync.log"
+	"Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content $LogFile
 	Exit
 }
 
-Invoke-Expression "$psql --dbname=postgres --echo-queries --file=pg_ad_sync.tmp.sql" | Add-Content "pg_ad_sync.log"
+if ($DryRun) {
+	"-- Running: DryRun" | Add-Content $LogFile
+} else {
+	"Running '$SqlFile':" | Add-Content $LogFile
+	# Ignore errors when user already exist
+	$ErrorActionPreference = "Continue"
+	Invoke-Expression "$psql --echo-all --file=$SqlFile" 2>&1 | Add-Content $LogFile
+}
 if (0 -ne $LASTEXITCODE) {
-	"Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content "pg_ad_sync.log"
+	"Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content $LogFile
 	Exit
 }
 
-Get-Date -Format "o" | Add-Content "pg_ad_sync.log"
+Get-Date -Format "o" | Add-Content $LogFile
