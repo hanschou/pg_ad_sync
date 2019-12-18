@@ -1,4 +1,3 @@
-# pg_ad_sync
 PostgreSQL Active Directory synchronization
 ===========================================
 
@@ -27,7 +26,7 @@ the name *PG_USERS*. This script should in some way be
 told to look up members of the role in the list of groups
 in the AD. This is done by giving the role a special comment:
 
-   This role is in sync with Active Directory.
+   *This role is in sync with Active Directory.*
 
 This script first look up all roles having this special comment.
 Then it look up the same role name *PG_USERS* in the AD
@@ -37,6 +36,14 @@ Then it creates all the users as roles in PostgreSQL
 
 The role *PG_USERS* is granted access to the database *INVENTORY*
 or the role is simply the owner of the database.
+
+Steps to create the roles
+-------------------------
+
+1. In PostgreSQL, get list of roles with a special comment
+2. Look up the role name as a group name in the AD
+3. Get the member of the AD group
+4. Create the members as roles in PostgreSQL
 
 Task Scheduler
 --------------
