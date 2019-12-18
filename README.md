@@ -54,3 +54,23 @@ is a change in:
 1. A new role/group is created in PostgreSQL and the AD
 2. A new member is added to the group in the AD
 3. A member is removed from the group in the AD
+
+pg\_hba.conf - Host Based Authentication
+----------------------------------------
+
+To let PostgreSQL look up groups and members in the AD a 
+connection has to be made in pg\_hba.conf. This can either be
+a *LDAP* or a *SSPI* connection.
+
+The order of entries matters in pg\_hba.conf so place the connection
+entry as the last entry in the list.
+
+With *LDAP* specify the hostname of the AD-server like this:
+
+   TYPE DATABASE USER ADDRESS    METHOD
+   host all      all  10.0.0.0/8 ldap ldapserver=example.org ldapprefix="" ldapsuffix="@example.org"
+
+With *SSPI* specify the hostname of the AD-server like this:
+
+   TYPE DATABASE USER ADDRESS    METHOD
+   host all      all  10.0.0.0/8 sspi
