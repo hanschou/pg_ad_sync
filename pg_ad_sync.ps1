@@ -8,11 +8,12 @@ Param (
     [string]$PgPort="",
     [string]$PgDatabase="postgres",
     [string]$PgUser="",
-    [string]$PgPassword=""
+    [string]$PgPassword="",
+	$(Get-Content "pg_ad_sync.cfg")
 )
 $ErrorActionPreference = "Stop"
 
-# By Hans Schou 2019-05-08
+# By Hans Schou 2019-12-23
 
 if ($Help) {
     Write-Host @"
@@ -150,24 +151,23 @@ Invoke-Expression "$psql --tuples-only --no-align --command=""SELECT rolname FRO
         "-- Role: $role" | Add-Content $SqlFile
         $search = [adsisearcher][ADSI]""
         $search.Filter = "(&(objectclass=group)(cn=$role))" # LDAP syntax
-        $search.FindOne().GetDirectoryEntry() |
-            select -ExpandProperty member | # expand to distinguishedname
-                ForEach-object {  # for each member in the group
-                    $searcher = [adsisearcher]"(distinguishedname=$_)"
-                    $member = $searcher.FindOne().Properties.samaccountname
-                    if ($member -iMatch "postgres" -Or $member -iMatch "^Skabelon.*") {
-                        "-- Reserved word, skipping member: $member" | Add-Content $SqlFile
-                    } else {
-                        if (-Not $NoCaseRoles -Or $member -Match "-") {
-                            $member = """$member"""
-                        } else {
-                            $member = "$member".ToLower()
-                        }
-                        "CREATE ROLE $member WITH LOGIN;" | Add-Content $SqlFile
-                        "COMMENT ON ROLE $member IS 'Created by pg_ad_sync.';" | Add-Content $SqlFile
-                        "GRANT ""$role"" TO $member;" | Add-Content $SqlFile
-                    }
-                }
+        $search.FindOne().GetDirectoryEntry().member |
+			ForEach-object {  # for each member in the group
+				$searcher = [adsisearcher]"(distinguishedname=$_)"
+				$member = $searcher.FindOne().Properties.samaccountname
+				if ($member -iMatch "postgres" -Or $member -iMatch "^Skabelon.*") {
+					"-- Reserved word, skipping member: $member" | Add-Content $SqlFile
+				} else {
+					if (-Not $NoCaseRoles -Or $member -Match "-") {
+						$member = """$member"""
+					} else {
+						$member = "$member".ToLower()
+					}
+					"CREATE ROLE $member WITH LOGIN;" | Add-Content $SqlFile
+					"COMMENT ON ROLE $member IS 'Created by pg_ad_sync.';" | Add-Content $SqlFile
+					"GRANT ""$role"" TO $member;" | Add-Content $SqlFile
+				}
+			}
     }
 if (0 -ne $LASTEXITCODE) {
     "Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content $LogFile
