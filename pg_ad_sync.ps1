@@ -8,8 +8,7 @@ Param (
     [string]$PgPort="",
     [string]$PgDatabase="postgres",
     [string]$PgUser="",
-    [string]$PgPassword="",
-	$(Get-Content "pg_ad_sync.cfg")
+    [string]$PgPassword=""
 )
 $ErrorActionPreference = "Stop"
 
