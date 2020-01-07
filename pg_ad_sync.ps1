@@ -19,7 +19,8 @@ if ($Help) {
 PostgreSQL Active Directory synchronization
 https://github.com/hanschou/pg_ad_sync
 
-Tool for automatic creating roles (users) in PosgreSQL which is defined in a Windows Active Directory group.
+Tool for automatic creating roles (users) in PosgreSQL which is defined in a
+Windows Active Directory group.
 
 Options:
     -Help
@@ -32,11 +33,13 @@ Options:
 
     -NoCaseRoles
         Default: False
-        Do not create roles case sensitive. If roles are created case sensitive one has to logon with the exactly same casing.
+        Do not create roles case sensitive. If roles are created case
+	sensitive one has to logon with the exactly same casing.
 
     -DryRun
         Default: False
-        Run without dropping or creating users in postgres. Only create the SQL file pg_ad_sync.tmp.sql
+        Run without dropping or creating users in postgres. Only create the
+	SQL file pg_ad_sync.tmp.sql
         
     -PgHost
         Default: Empty
@@ -58,15 +61,18 @@ Options:
         Default: Blank
         Password for the PostgreSQL administrator.
 
-To get a group from the AD, a group with the same name has be created in PosgreSQL as a role.
-The role in PostgreSQL has to have special comment for the script to be recognized.
+To get a group from the AD, a group with the same name has be created in
+PotgreSQL as a role.
+The role in PostgreSQL has to have special comment for the script to be
+recognized.
 Example an AD group called "PG-USERS":
   CREATE ROLE "PG-USERS";
   COMMENT ON ROLE "PG-USERS" IS 'This role is in sync with Active Directory.';
 Double quote is required as the group name has hyphen in it.
 
 Credentials:
-  Username and password for PostgreSQL can be given on command line, in the environment or in credentials file.
+  Username and password for PostgreSQL can be given on command line, in the
+  environment or in credentials file.
   Command line:
     powershell.exe -File pg_ad_sync.ps1 -PgUser postgres -PgPassword p4zzw0rd
   Environment:
