@@ -94,6 +94,23 @@ Example output:
 PostgreSQL configuration. Enable LDAP.
  Add the following line to pg_hba.conf:
    host all all 10.0.0.0/8 ldap ldapserver=example.org ldapprefix="" ldapsuffix="@example.org"
+
+Configuration file:
+  All options can be stored in a configuration file
+  named 'pg_ad_sync.psd1' in the same directory.
+  Example of file content (with no first level indent):
+    @{
+	DropAdRoles = $false
+	NoCaseRoles = $false
+	DryRun = $false
+        PgHost = "example.org"
+	PgPort = 5432
+	PgDatabase = "postgres"
+	PgUser = "postgres"
+	pgPassword = "p4zzw0rd"
+    }
+  For more details see this example:
+    https://ramblingcookiemonster.github.io/PowerShell-Configuration-Data/#powershell-data-file-psd1
 "@
     Exit
 }
@@ -109,7 +126,29 @@ if (Test-Path $SqlFile) {
 }
 Get-Date -Format "o" | Add-Content $LogFile
 
-"\set ON_ERROR_STOP 0"  | Add-Content $SqlFile
+$ConfigPSD1 = "pg_ad_sync.psd1"
+if (Test-Path $ConfigPSD1) {
+    "Reading configuration file: $ConfigPSD1" | Add-Content $LogFile
+    $Config = Import-LocalizedData -FileName $ConfigPSD1
+    $Config | Add-Content $LogFile
+    if ($Config.PgHost) {
+        $PgHost = $Config.PgHost
+    }
+    if ($Config.PgPort) {
+        $PgPort = $Config.PgPort
+    }
+    if ($Config.PgDatabase) {
+        $PgDatabase = $Config.PgDatabase
+    }
+    if ($Config.PgUser) {
+        $PgUser = $Config.PgUser
+    }
+    if ($Config.PgPassword) {
+        $PgPassword = $Config.PgPassword
+    }
+}
+
+"\set ON_ERROR_STOP 0" | Add-Content $SqlFile
 
 $psql = "psql.exe"
 
