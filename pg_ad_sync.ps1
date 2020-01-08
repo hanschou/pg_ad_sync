@@ -8,8 +8,8 @@ Param (
     [string]$PgPort="",
     [string]$PgDatabase="postgres",
     [string]$PgUser="",
-    [string]$PgPassword=""
-    [string]$TagUser="Created by pg_ad_sync."
+    [string]$PgPassword="",
+    [string]$TagUser="Created by pg_ad_sync.",
     [string]$TagGroup="This role is in sync with Active Directory."
 )
 $ErrorActionPreference = "Stop"
@@ -111,14 +111,14 @@ Configuration file:
   named 'pg_ad_sync.psd1' in the same directory.
   Example of file content (avoid first level indent):
     @{
-	DropAdRoles = $false
-	NoCaseRoles = $false
-	DryRun = $false
-        PgHost = "example.org"
-	PgPort = 5432
-	PgDatabase = "postgres"
-	PgUser = "postgres"
-	PgPassword = "p4zzw0rd"
+	  DropAdRoles = `$false
+	  NoCaseRoles = `$false
+	  DryRun = `$false
+      PgHost = "example.org"
+	  PgPort = 5432
+	  PgDatabase = "postgres"
+	  PgUser = "postgres"
+	  PgPassword = "p4zzw0rd"
     }
   For more details see this example:
     https://ramblingcookiemonster.github.io/PowerShell-Configuration-Data/#powershell-data-file-psd1
@@ -142,6 +142,15 @@ if (Test-Path $ConfigPSD1) {
     "Reading configuration file: $ConfigPSD1" | Add-Content $LogFile
     $Config = Import-LocalizedData -FileName $ConfigPSD1
     $Config | Add-Content $LogFile
+    if ($Config.DropAdRoles) {
+        $DropAdRoles = $Config.DropAdRoles
+    }
+    if ($Config.NoCaseRoles) {
+        $NoCaseRoles = $Config.NoCaseRoles
+    }
+    if ($Config.DryRun) {
+        $DryRun = $Config.DryRun
+    }
     if ($Config.PgHost) {
         $PgHost = $Config.PgHost
     }
