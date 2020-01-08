@@ -9,6 +9,8 @@ Param (
     [string]$PgDatabase="postgres",
     [string]$PgUser="",
     [string]$PgPassword=""
+    [string]$TagUser="Created by pg_ad_sync."
+    [string]$TagGroup="This role is in sync with Active Directory."
 )
 $ErrorActionPreference = "Stop"
 
@@ -29,7 +31,7 @@ Options:
     -DropAdRoles
         Default: False
         Drop all roles which has a special commment:
-            'Created by pg_ad_sync.'
+          '$TagUser'
 
     -NoCaseRoles
         Default: False
@@ -61,13 +63,22 @@ Options:
         Default: Blank
         Password for the PostgreSQL administrator.
 
+    -TagUser
+        Default: $TagUser
+	The tag used to identfy users added by pg_ad_sync.
+
+    -TagGroup
+        Default: $TagGroup
+	The tag used to identfy groups which should be lookup
+	in the Active Directory.
+
 To get a group from the AD, a group with the same name has be created in
 PotgreSQL as a role.
 The role in PostgreSQL has to have special comment for the script to be
 recognized.
 Example an AD group called "PG-USERS":
   CREATE ROLE "PG-USERS";
-  COMMENT ON ROLE "PG-USERS" IS 'This role is in sync with Active Directory.';
+  COMMENT ON ROLE "PG-USERS" IS '$TagGroup';
 Double quote is required as the group name has hyphen in it.
 
 Credentials:
@@ -98,7 +109,7 @@ PostgreSQL configuration. Enable LDAP.
 Configuration file:
   All options can be stored in a configuration file
   named 'pg_ad_sync.psd1' in the same directory.
-  Example of file content (with no first level indent):
+  Example of file content (avoid first level indent):
     @{
 	DropAdRoles = $false
 	NoCaseRoles = $false
@@ -107,7 +118,7 @@ Configuration file:
 	PgPort = 5432
 	PgDatabase = "postgres"
 	PgUser = "postgres"
-	pgPassword = "p4zzw0rd"
+	PgPassword = "p4zzw0rd"
     }
   For more details see this example:
     https://ramblingcookiemonster.github.io/PowerShell-Configuration-Data/#powershell-data-file-psd1
@@ -146,6 +157,12 @@ if (Test-Path $ConfigPSD1) {
     if ($Config.PgPassword) {
         $PgPassword = $Config.PgPassword
     }
+    if ($Config.TagUser) {
+        $TagUser = $Config.TagUser
+    }
+    if ($Config.TagGroup) {
+        $TagGroup = $Config.TagGroup
+    }
 }
 
 "\set ON_ERROR_STOP 0" | Add-Content $SqlFile
@@ -179,7 +196,7 @@ If (Test-Path $SqlFile) {
 if ($DropAdRoles) {
     "Warning, existing roles are dropped." | Add-Content $LogFile
     $command1 = @"
-"SELECT 'DROP ROLE IF EXISTS """"' || rolname || '"""";' FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='Created by pg_ad_sync.' ORDER BY oid;"
+"SELECT 'DROP ROLE IF EXISTS """"' || rolname || '"""";' FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='$TagUser' ORDER BY oid;"
 "@
     Invoke-Expression "$psql --tuples-only --no-align --command=$command1" 2>&1 | Add-Content $SqlFile
     if (0 -ne $LASTEXITCODE) {
@@ -189,7 +206,7 @@ if ($DropAdRoles) {
 }
 
 "Getting list from AD:" | Add-Content $LogFile
-Invoke-Expression "$psql --tuples-only --no-align --command=""SELECT rolname FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='This role is in sync with Active Directory.'""" |
+Invoke-Expression "$psql --tuples-only --no-align --command=""SELECT rolname FROM pg_roles r JOIN pg_shdescription s ON (r.oid=s.objoid) WHERE s.description='$TagGroup'""" |
     ForEach-Object {
         $role = $_
         "-- Role: $role" | Add-Content $SqlFile
@@ -208,7 +225,7 @@ Invoke-Expression "$psql --tuples-only --no-align --command=""SELECT rolname FRO
 						$member = "$member".ToLower()
 					}
 					"CREATE ROLE $member WITH LOGIN;" | Add-Content $SqlFile
-					"COMMENT ON ROLE $member IS 'Created by pg_ad_sync.';" | Add-Content $SqlFile
+					"COMMENT ON ROLE $member IS '$TagUser';" | Add-Content $SqlFile
 					"GRANT ""$role"" TO $member;" | Add-Content $SqlFile
 				}
 			}
