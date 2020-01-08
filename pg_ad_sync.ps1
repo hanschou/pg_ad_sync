@@ -21,7 +21,7 @@ if ($Help) {
 PostgreSQL Active Directory synchronization
 https://github.com/hanschou/pg_ad_sync
 
-Tool for automatic creating roles (users) in PosgreSQL which is defined in a
+Tool for automatic creating roles (users) in PosgreSQL which are defined in a
 Windows Active Directory group.
 
 Options:
@@ -36,12 +36,12 @@ Options:
     -NoCaseRoles
         Default: False
         Do not create roles case sensitive. If roles are created case
-	sensitive one has to logon with the exactly same casing.
+        sensitive one has to logon with the exactly same casing.
 
     -DryRun
         Default: False
         Run without dropping or creating users in postgres. Only create the
-	SQL file pg_ad_sync.tmp.sql
+        SQL file pg_ad_sync.tmp.sql
         
     -PgHost
         Default: Empty
@@ -65,12 +65,12 @@ Options:
 
     -TagUser
         Default: $TagUser
-	The tag used to identfy users added by pg_ad_sync.
+        The tag used to identfy users added by pg_ad_sync.
 
     -TagGroup
         Default: $TagGroup
-	The tag used to identfy groups which should be lookup
-	in the Active Directory.
+        The tag used to identfy groups which should be lookup
+        in the Active Directory.
 
 To get a group from the AD, a group with the same name has be created in
 PotgreSQL as a role.
@@ -111,14 +111,14 @@ Configuration file:
   named 'pg_ad_sync.psd1' in the same directory.
   Example of file content (avoid first level indent):
     @{
-	  DropAdRoles = `$false
-	  NoCaseRoles = `$false
-	  DryRun = `$false
+      DropAdRoles = `$false
+      NoCaseRoles = `$false
+      DryRun = `$false
       PgHost = "example.org"
-	  PgPort = 5432
-	  PgDatabase = "postgres"
-	  PgUser = "postgres"
-	  PgPassword = "p4zzw0rd"
+      PgPort = 5432
+      PgDatabase = "postgres"
+      PgUser = "postgres"
+      PgPassword = "p4zzw0rd"
     }
   For more details see this example:
     https://ramblingcookiemonster.github.io/PowerShell-Configuration-Data/#powershell-data-file-psd1
@@ -222,22 +222,22 @@ Invoke-Expression "$psql --tuples-only --no-align --command=""SELECT rolname FRO
         $search = [adsisearcher][ADSI]""
         $search.Filter = "(&(objectclass=group)(cn=$role))" # LDAP syntax
         $search.FindOne().GetDirectoryEntry().member |
-			ForEach-object {  # for each member in the group
-				$searcher = [adsisearcher]"(distinguishedname=$_)"
-				$member = $searcher.FindOne().Properties.samaccountname
-				if ($member -iMatch "postgres" -Or $member -iMatch "^Skabelon.*") {
-					"-- Reserved word, skipping member: $member" | Add-Content $SqlFile
-				} else {
-					if (-Not $NoCaseRoles -Or $member -Match "-") {
-						$member = """$member"""
-					} else {
-						$member = "$member".ToLower()
-					}
-					"CREATE ROLE $member WITH LOGIN;" | Add-Content $SqlFile
-					"COMMENT ON ROLE $member IS '$TagUser';" | Add-Content $SqlFile
-					"GRANT ""$role"" TO $member;" | Add-Content $SqlFile
-				}
-			}
+            ForEach-object {  # for each member in the group
+                $searcher = [adsisearcher]"(distinguishedname=$_)"
+                $member = $searcher.FindOne().Properties.samaccountname
+                if ($member -iMatch "postgres" -Or $member -iMatch "^Skabelon.*") {
+                    "-- Reserved word, skipping member: $member" | Add-Content $SqlFile
+                } else {
+                    if (-Not $NoCaseRoles -Or $member -Match "-") {
+                        $member = """$member"""
+                    } else {
+                        $member = "$member".ToLower()
+                    }
+                    "CREATE ROLE $member WITH LOGIN;" | Add-Content $SqlFile
+                    "COMMENT ON ROLE $member IS '$TagUser';" | Add-Content $SqlFile
+                    "GRANT ""$role"" TO $member;" | Add-Content $SqlFile
+                }
+            }
     }
 if (0 -ne $LASTEXITCODE) {
     "Error: Code $LASTEXITCODE invoking psql.exe" | Add-Content $LogFile
